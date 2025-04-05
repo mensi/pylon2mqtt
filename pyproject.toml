@@ -1,0 +1,31 @@
+[project]
+name = "pylon2mqtt"
+version = "0.1.0"
+description = "Pylon Battery statistics to MQTT exporter"
+readme = "README.md"
+license = { file = "LICENSE.txt" }
+authors = [
+    { name = "Manuel Stocker", email = "mensi@mensi.ch" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1.8",
+    "paho-mqtt>=2.1.0",
+    "pyserial>=3.5",
+    "pyudev>=0.24.3 ; sys_platform == 'linux'",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mensi/pylon2mqtt"
+
+[project.scripts]
+pylon2mqtt = "pylon2mqtt.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
