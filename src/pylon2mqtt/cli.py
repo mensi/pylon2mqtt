@@ -9,7 +9,28 @@ import paho.mqtt.publish as mqtt
 from textwrap import dedent
 
 from .protocol import Protocol
-from .usbutils import get_device_serial, reset_device
+from .usbutils import get_device_serial, reset_device, find_device_by_serial
+
+
+def resolve_serial_port(serial: str) -> str:
+    """Resolve the serial parameter to a device path.
+
+    If the parameter looks like a device path (contains / or starts with COM),
+    return it as-is. Otherwise, treat it as a USB serial number and find the
+    corresponding device.
+
+    Args:
+        serial: Either a device path or USB serial number
+
+    Returns:
+        The device path to use
+    """
+    # Check if it looks like a device path
+    if '/' in serial or serial.upper().startswith('COM'):
+        return serial
+
+    # Otherwise, treat it as a USB serial number
+    return find_device_by_serial(serial)
 
 
 @click.group()
@@ -18,16 +39,17 @@ def cli():
 
 
 @cli.command()
-@click.option('--serial', '-s', required=True, help='Serial port')
+@click.option('--serial', '-s', required=True, help='Serial port (e.g., COM1, /dev/ttyUSB0) or USB device serial number')
 def test(serial):
     """Try to read one status update"""
-    protocol = Protocol(serial)
+    serial_port = resolve_serial_port(serial)
+    protocol = Protocol(serial_port)
     for battery_status in protocol.read_update():
         click.echo(repr(battery_status.to_dict()))
 
 
 @cli.command()
-@click.option('--serial', '-s', required=True, help='Serial port')
+@click.option('--serial', '-s', required=True, help='Serial port (e.g., COM1, /dev/ttyUSB0) or USB device serial number')
 @click.option('--hostname', '-h', required=True, help="MQTT hostname")
 @click.option('--topic_prefix', '-t', help="MQTT topic prefix", default="pylon2mqtt")
 @click.option('--publish_absent', is_flag=True, help="Publish absent battery slots", default=False)
@@ -36,7 +58,8 @@ def test(serial):
 @click.option('--update_interval', '-i', help="Update interval in seconds", type=float, default=60.0)
 def run(serial: str, hostname: str, topic_prefix: str, publish_absent: bool, first_only: bool, update_interval: float):
     """Read values from a Pylon battery and publish to MQTT periodically"""
-    protocol = Protocol(serial)
+    serial_port = resolve_serial_port(serial)
+    protocol = Protocol(serial_port)
     for battery_states in protocol.read_updates(interval_secs=update_interval):
         messages = []
         for battery_state in battery_states:
@@ -69,26 +92,30 @@ def generate_systemd(**kwargs):
     After=network.target
     
     [Service]
-    ExecStart={sys.argv[0]} run {' '.join(f'--{k}' if v == True else f'--{k}={v}' for k, v in provided_options.items())}
+    ExecStart={sys.argv[0]} run {' '.join(f'--{k}' if v is True else f'--{k}={v}' for k, v in provided_options.items())}
     Restart=on-failure
     
     [Install]
     WantedBy=multi-user.target"""))
+
+
+# Give generate_systemd the exact same parameters as run
 generate_systemd.params = run.params
 
 
 @cli.command()
-@click.option('--serial', '-s', required=True, help='Serial port')
+@click.option('--serial', '-s', required=True, help='Serial port (e.g., COM1, /dev/ttyUSB0) or USB device serial number')
 def reset(serial: str):
     """Reset the serial device
 
     This is useful for cases where you have a cheap clone USB->Serial adapter that sometimes drops data. Resetting
     it usually fixes the issue for a while. Currently only works on Linux."""
-    reset_device(serial)
+    serial_port = resolve_serial_port(serial)
+    reset_device(serial_port)
 
 
 @cli.command()
-@click.option('--serial', '-s', required=True, help='Serial port')
+@click.option('--serial', '-s', required=True, help='Serial port (e.g., COM1, /dev/ttyUSB0) or USB device serial number')
 @click.option('--symlink_name', '-l', help='Serial port', default='pylonBattery')
 def generate_udev_rule(serial: str, symlink_name: str):
     """Generates a udev rule to use a stable symlink for your serial adapter
@@ -98,7 +125,8 @@ def generate_udev_rule(serial: str, symlink_name: str):
     don't have to worry about having multiple USB->Serial adapters plugged in as the one connected
     to your battery will get the same name based on its serial number.
     """
-    sn = get_device_serial(serial)
+    serial_port = resolve_serial_port(serial)
+    sn = get_device_serial(serial_port)
     click.echo(f'ACTION=="add", SUBSYSTEM=="tty", ATTRS{{serial}}=="{sn}", SYMLINK+="{symlink_name}"')
 
 

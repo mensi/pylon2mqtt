@@ -151,7 +151,7 @@ class BatteryState:
 
         # After that fix, the number of fields and headers should match
         if len(header) != len(fields):
-            raise ValueError('Expected %d fields, got %d', len(header), len(fields))
+            raise ValueError('Expected %d fields, got %d' % (len(header), len(fields)))
 
         # Parse the expected fields, with some tolerance for None values
         for name, value in zip(header, fields):
@@ -180,6 +180,7 @@ class Protocol:
             self.serial = serial.Serial(port=serial_port, baudrate=115200, timeout=2)
         else:
             self.serial = serial_port
+        logger.info('Starting protocol on %s', self.serial.port)
 
     def read_updates(self, interval_secs: float = 5) -> Iterator[list[BatteryState]]:
         while True:

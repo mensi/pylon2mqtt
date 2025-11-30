@@ -1,3 +1,6 @@
+from serial.tools import list_ports
+
+# For resetting USB devices, we need udev on Linux
 try:
     import pyudev
     import fcntl
@@ -49,16 +52,15 @@ def reset_linux_device(path: str) -> bool:
 
 def get_device_serial(path: str) -> str:
     """Get the serial number of the USB device."""
-    if not (pyudev or fcntl):
-        raise Exception('Unable to load pyudev or fcntl - is this a Linux system?')
-
-    context = pyudev.Context()
-    device = pyudev.Devices.from_device_file(context, path)
-
-    while device is not None:
-        try:
-            return device.attributes.asstring('serial')
-        except KeyError:
-            device = device.parent
-
+    for port in list_ports.comports():
+        if port.device == path and port.serial_number:
+            return port.serial_number
     raise Exception('Unable to find serial number of device')
+
+
+def find_device_by_serial(serial_number: str) -> str:
+    """Find a serial device path by USB serial number."""
+    for port in list_ports.comports():
+        if port.serial_number == serial_number:
+            return port.device
+    raise Exception(f'Unable to find device with serial number: {serial_number}')
